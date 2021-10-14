@@ -1,23 +1,46 @@
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:newsapp/Authentication/signUp.dart';
 import 'package:newsapp/Home/Categories/detail.dart';
 import 'package:newsapp/Home/Search/search.dart';
+import 'package:uuid/uuid.dart';
 
 class SearchResult extends StatefulWidget {
   final result;
-  const SearchResult({this.result});
+  const SearchResult({required this.result});
   @override
   _SearchResultState createState() => _SearchResultState();
 }
 
 class _SearchResultState extends State<SearchResult> {
-  var from = '';
-  var to = '';
+  final currentUser = FirebaseAuth.instance.currentUser;
+  var docId = Uuid();
+  var favouriteHeart = [];
+  var dateNow = DateTime.now();
+  var dayFController = TextEditingController();
+  var monthFController = TextEditingController();
+  var yearFController = TextEditingController();
+  var dayF = FocusNode();
+  var monthF = FocusNode();
+  var yearF = FocusNode();
+  var dayTController = TextEditingController();
+  var monthTController = TextEditingController();
+  var yearTController = TextEditingController();
+  var dayT = FocusNode();
+  var monthT = FocusNode();
+  var yearT = FocusNode();
   var filterFrom = '';
   var filterTo = '';
-  // var dateOfBirth = '';
+  final customCacheManager = CacheManager(
+      Config('searchResultCacheKey', stalePeriod: Duration(hours: 2)));
+
+  var dateOfBirth = '';
   getUser() async {
     var dateTo = DateTime.now();
     final dateToString = DateFormat('yyyy-MM-d').format(dateTo);
@@ -57,50 +80,93 @@ class _SearchResultState extends State<SearchResult> {
         dateFrom = '${dateTo.year}-${dateTo.month - 1}-${30}';
       }
     }
+    var db = FirebaseFirestore.instance;
     var response;
     filterFrom != ''
         ? response = await http.get(Uri.parse(
-            'https://newsapi.org/v2/everything?q=${widget.result}&from=$filterFrom&to=$dateToString&top&pageSize=30&apiKey=2d994719819c49a483538246c73c74ab'))
+            'https://newsapi.org/v2/everything?q=${widget.result}&from=$filterFrom&top&pageSize=50&apiKey=2d994719819c49a483538246c73c74ab'))
         : filterFrom != '' && filterTo != ''
             ? response = await http.get(Uri.parse(
-                'https://newsapi.org/v2/everything?q=${widget.result}&from=$filterFrom&to=$filterTo&top&pageSize=30&apiKey=2d994719819c49a483538246c73c74ab'))
+                'https://newsapi.org/v2/everything?q=${widget.result}&from=$filterFrom&to=$filterTo&top&pageSize=50&apiKey=2d994719819c49a483538246c73c74ab'))
             : response = await http.get(Uri.parse(
-                'https://newsapi.org/v2/everything?q=${widget.result}&from=$dateFrom&to=$dateToString&top&pageSize=30&apiKey=2d994719819c49a483538246c73c74ab'));
-    // 'https://newsapi.org/v2/everything?language=en&q=stories&from=$dateFrom&to=${dateTo.year}-${dateTo.month}-${dateTo.day}&pageSize=50&sortBy=top&apiKey=56c6fdfe8bed415480e0088f18c86c0f'));
+                'https://newsapi.org/v2/everything?q=${widget.result}&language&from=$dateFrom&sortBy=top&pageSize=50&apiKey=2d994719819c49a483538246c73c74ab'));
     final body = json.decode(response.body);
-    List takingData = body['articles'];
-    // List takingData = body['articles'].cast<dynamic>();
-    return takingData;
+    List data = body['articles'];
+    if (FirebaseAuth.instance.currentUser != null) {
+      var favouriteCheck = await db
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .get()
+          .then((querySnapshot) =>
+              querySnapshot.docs.map((e) => e['articles']).toList());
+      for (var i = 0; i < data.length; i++) {
+        data[i]['fav'] = 'off';
+        for (var fI = 0; fI < favouriteCheck.length; fI++) {
+          if (favouriteCheck[fI]['title'] == data[i]['title']) {
+            data[i] = favouriteCheck[fI];
+          }
+        }
+        favouriteHeart = [...favouriteHeart, data[i]['fav']];
+      }
+    }
+    return data;
   }
 
-  pickDate(name) async {
-    FocusScope.of(context).unfocus();
-    final initialDate = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initialDate,
-      firstDate: DateTime(DateTime.now().year - 30),
-      lastDate: DateTime(DateTime.now().year + 30),
-    );
-    final formatter = DateFormat('yyyy-MM-d');
-    final String formatted = formatter.format(date!);
-    setState(() {
-      name == 'From' ? from = formatted : to = formatted;
-    });
+  favouriteAdd(item, index) async {
+    var id = docId.v4();
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+    try {
+      item['id'] = id;
+      item['fav'] = 'on';
+      await firestore
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .doc('$id')
+          .set({'articles': item});
+      setState(() {
+        favouriteHeart[index] = 'on';
+      });
+    } catch (e) {
+      print(e);
+    }
   }
 
-  Widget testing(context, item) {
+  favouriteRemove(item, index) async {
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+    try {
+      await firestore
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .doc('${item['id']}')
+          .delete();
+      setState(() {
+        favouriteHeart[index] = 'off';
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  Widget testing(context, item, index) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
-    var time = '';
     var datebaseTime = DateTime.parse(item['publishedAt']);
     final dateString = DateFormat('dd-MM-yyyy h:mma').format(datebaseTime);
     final datemonth = DateFormat('dd-MM-yyyy').format(datebaseTime);
-
     DateTime notificationDate =
         DateFormat("dd-MM-yyyy h:mma").parse(dateString);
     final date2 = DateTime.now();
     final difference = date2.difference(notificationDate);
+    checking() async {
+      await precacheImage(
+          CachedNetworkImageProvider('${item['urlToImage']}'), context);
+    }
+
+    checking();
+
     return Padding(
       padding: EdgeInsets.only(top: height * 0.01),
       child: Container(
@@ -112,28 +178,66 @@ class _SearchResultState extends State<SearchResult> {
         ),
         child: Stack(
           children: [
-            Positioned(
-              right: width * 0.02,
-              bottom: height * 0.005,
-              child: GestureDetector(
-                onTap: () => {},
-                child: Icon(
-                  Icons.favorite_border,
-                  color: Colors.red,
-                ),
-              ),
-            ),
+            FirebaseAuth.instance.currentUser != null
+                ? favouriteHeart[index] == 'on'
+                    ? Positioned(
+                        right: width * 0.02,
+                        bottom: height * 0.005,
+                        child: GestureDetector(
+                          onTap: () => {
+                            favouriteRemove(item, index),
+                          },
+                          child: Icon(
+                            Icons.favorite,
+                            color: Colors.red,
+                          ),
+                        ),
+                      )
+                    : Positioned(
+                        right: width * 0.02,
+                        bottom: height * 0.005,
+                        child: GestureDetector(
+                          onTap: () => {
+                            favouriteAdd(item, index),
+                          },
+                          child: Icon(
+                            Icons.favorite_border,
+                          ),
+                        ),
+                      )
+                : Positioned(
+                    right: width * 0.02,
+                    bottom: height * 0.005,
+                    child: GestureDetector(
+                      onTap: () => {
+                        Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => SignUp()))
+                      },
+                      child: Icon(
+                        Icons.favorite_border,
+                      ),
+                    ),
+                  ),
             Row(
               children: [
                 Container(
-                  width: width * 0.4,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
+                    width: width * 0.4,
+                    height: height * 0.12,
+                    child: CachedNetworkImage(
+                      cacheManager: customCacheManager,
+                      key: UniqueKey(),
+                      imageUrl: '${item['urlToImage']}',
+                      width: width * 0.4,
+                      height: height * 0.12,
                       fit: BoxFit.cover,
-                      image: NetworkImage('${item['urlToImage']}'),
-                    ),
-                  ),
-                ),
+                      placeholder: (context, item) => Container(
+                        color: Colors.black12,
+                      ),
+                      errorWidget: (context, item, error) => Container(
+                        color: Colors.black12,
+                        child: Icon(Icons.error, color: Colors.red),
+                      ),
+                    )),
                 Padding(
                   padding: EdgeInsets.only(
                     top: height * 0.01,
@@ -182,8 +286,6 @@ class _SearchResultState extends State<SearchResult> {
                           ),
                           Container(
                             width: width * 0.35,
-                            // decoration: BoxDecoration(
-                            //     border: Border.all(color: Colors.black)),
                             child: Text(
                               '${item['source']['name']}',
                               maxLines: 1,
@@ -203,47 +305,77 @@ class _SearchResultState extends State<SearchResult> {
     );
   }
 
-  Widget input(context, name, controll) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(
-        name,
-        style: TextStyle(
-            fontSize: 15, color: Colors.white, fontWeight: FontWeight.w400),
-      ),
-      GestureDetector(
-        onTap: () => pickDate(name),
-        child: Container(
-            width: MediaQuery.of(context).size.width * 0.9,
-            height: MediaQuery.of(context).size.height * 0.07,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.black),
-              borderRadius: BorderRadius.all(Radius.circular(5)),
-            ),
-            child: ListTile(
-              leading: Icon(
-                Icons.calendar_today,
-                color: Colors.black,
-              ),
-              title: Center(
-                  child: Text(
-                name == 'From' && from != ''
-                    ? from
-                    : name == 'To' && to != ''
-                        ? to
-                        : '',
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 17,
-                ),
-              )),
-              trailing: Icon(
-                Icons.keyboard_arrow_down,
-                color: Colors.black,
-              ),
-            )),
-      )
-    ]);
+  changeDate(context) {
+    Navigator.pop(context);
+    //    both
+    if (dayFController.text.length == 2 &&
+        monthFController.text.length == 2 &&
+        yearFController.text.length == 4 &&
+        dayTController.text.length == 2 &&
+        monthTController.text.length == 2 &&
+        yearTController.text.length == 4) {
+      if (dayFController.text.startsWith('0') == true &&
+          dayTController.text.startsWith('0') == true) {
+        var day1 = dayFController.text.substring(1);
+        var day2 = dayTController.text.substring(1);
+        setState(() {
+          filterFrom = '${yearFController.text}-${monthFController.text}-$day1';
+          filterTo = '${yearTController.text}-${monthTController.text}-$day2';
+        });
+      } else if (dayFController.text.startsWith('0') == true) {
+        var day1 = dayFController.text.substring(1);
+        setState(() {
+          filterFrom = '${yearFController.text}-${monthFController.text}-$day1';
+          filterTo =
+              '${yearTController.text}-${monthTController.text}-${dayTController.text}';
+        });
+      } else if (dayTController.text.startsWith('0') == true) {
+        var day2 = dayTController.text.substring(1);
+        setState(() {
+          filterFrom =
+              '${yearFController.text}-${monthFController.text}-${dayFController.text}';
+          filterTo = '${yearTController.text}-${monthTController.text}-$day2';
+        });
+      } else {
+        setState(() {
+          filterFrom =
+              '${yearFController.text}-${monthFController.text}-${dayFController.text}';
+          filterTo =
+              '${yearTController.text}-${monthTController.text}-${dayTController.text}';
+        });
+      }
+    }
+    //   only from
+    else if (dayFController.text.length == 2 &&
+        monthFController.text.length == 2 &&
+        yearFController.text.length == 4) {
+      if (dayFController.text.startsWith('0') == true) {
+        var day1 = dayFController.text.substring(1);
+        setState(() {
+          filterFrom = '${yearFController.text}-${monthFController.text}-$day1';
+          dayTController.text = '';
+          monthTController.text = '';
+          yearTController.text = '';
+        });
+      } else {
+        setState(() {
+          filterFrom =
+              '${yearFController.text}-${monthFController.text}-${dayFController.text}';
+          dayTController.text = '';
+          monthTController.text = '';
+          yearTController.text = '';
+        });
+      }
+    } else {
+      dayFController.text = '';
+      monthFController.text = '';
+      yearFController.text = '';
+      dayTController.text = '';
+      monthTController.text = '';
+      yearTController.text = '';
+    }
+    print('filterFrom===>$filterFrom');
+    print('filterTo===>$filterTo');
   }
 
   @override
@@ -266,7 +398,7 @@ class _SearchResultState extends State<SearchResult> {
                   context, MaterialPageRoute(builder: (context) => Search()));
             },
             child: Container(
-              width: width*0.8,
+              width: width * 0.8,
               child: Text(
                 widget.result,
                 textAlign: TextAlign.left,
@@ -290,6 +422,9 @@ class _SearchResultState extends State<SearchResult> {
                                       fontSize: 20,
                                       fontWeight: FontWeight.bold),
                                 ),
+                                SizedBox(
+                                  height: height * 0.02,
+                                ),
                                 Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -298,47 +433,193 @@ class _SearchResultState extends State<SearchResult> {
                                         'From',
                                         style: TextStyle(
                                             fontSize: 15,
-                                            color: Colors.white,
+                                            color: Colors.black,
                                             fontWeight: FontWeight.w400),
                                       ),
                                       GestureDetector(
-                                        onTap: () => pickDate('From'),
-                                        child: Container(
-                                            width: MediaQuery.of(context)
-                                                    .size
-                                                    .width *
-                                                0.9,
-                                            height: MediaQuery.of(context)
-                                                    .size
-                                                    .height *
-                                                0.07,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              border: Border.all(
-                                                  color: Colors.black),
-                                              borderRadius: BorderRadius.all(
-                                                  Radius.circular(5)),
-                                            ),
-                                            child: ListTile(
-                                              leading: Icon(
-                                                Icons.calendar_today,
-                                                color: Colors.black,
+                                          onTap: () => FocusScope.of(context)
+                                              .requestFocus(dayF),
+                                          child: Container(
+                                              width: MediaQuery.of(context)
+                                                      .size
+                                                      .width *
+                                                  0.9,
+                                              height: MediaQuery.of(context)
+                                                      .size
+                                                      .height *
+                                                  0.07,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                border: Border.all(
+                                                    color: Colors.black),
+                                                borderRadius: BorderRadius.all(
+                                                    Radius.circular(5)),
                                               ),
-                                              title: Center(
-                                                  child: Text(
-                                                from != '' ? from : '',
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 17,
+                                              child: Padding(
+                                                padding: EdgeInsets.only(
+                                                    left: width * 0.02),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      width: 20,
+                                                      child: TextField(
+                                                        controller:
+                                                            dayFController,
+                                                        onChanged: (e) => {
+                                                          if (e.length == 2 &&
+                                                              monthFController
+                                                                      .text
+                                                                      .length <
+                                                                  2)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      monthF)
+                                                            }
+                                                          else if (e.length ==
+                                                              2)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      FocusNode())
+                                                            }
+                                                        },
+                                                        focusNode: dayF,
+                                                        maxLength: 2,
+                                                        keyboardType:
+                                                            TextInputType
+                                                                .number,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          counterText: '',
+                                                          hintText:
+                                                              '${dateNow.day}',
+                                                          border:
+                                                              InputBorder.none,
+                                                          focusedBorder:
+                                                              InputBorder.none,
+                                                          enabledBorder:
+                                                              InputBorder.none,
+                                                          errorBorder:
+                                                              InputBorder.none,
+                                                          disabledBorder:
+                                                              InputBorder.none,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(' - '),
+                                                    Container(
+                                                      width: 20,
+                                                      child: Center(
+                                                        child: TextField(
+                                                          onChanged: (e) => {
+                                                            if (e.length == 2 &&
+                                                                yearFController
+                                                                        .text
+                                                                        .length <
+                                                                    4)
+                                                              {
+                                                                FocusScope.of(
+                                                                        context)
+                                                                    .requestFocus(
+                                                                        yearF)
+                                                              }
+                                                            else if (e.length ==
+                                                                2)
+                                                              {
+                                                                FocusScope.of(
+                                                                        context)
+                                                                    .requestFocus(
+                                                                        FocusNode())
+                                                              }
+                                                          },
+                                                          controller:
+                                                              monthFController,
+                                                          focusNode: monthF,
+                                                          maxLength: 2,
+                                                          keyboardType:
+                                                              TextInputType
+                                                                  .number,
+                                                          decoration:
+                                                              InputDecoration(
+                                                            counterText: '',
+                                                            hintText: dateNow
+                                                                        .month !=
+                                                                    1
+                                                                ? '0${dateNow.month - 1}'
+                                                                : dateNow.month <
+                                                                        10
+                                                                    ? '0${dateNow.month}'
+                                                                    : '${dateNow.month}',
+                                                            border: InputBorder
+                                                                .none,
+                                                            focusedBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            enabledBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            errorBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            disabledBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(' - '),
+                                                    Container(
+                                                      width: 40,
+                                                      child: TextField(
+                                                        onChanged: (e) => {
+                                                          if (e.length == 4)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      FocusNode())
+                                                            }
+                                                        },
+                                                        keyboardType:
+                                                            TextInputType
+                                                                .number,
+                                                        controller:
+                                                            yearFController,
+                                                        focusNode: yearF,
+                                                        maxLength: 4,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          counterText: '',
+                                                          hintText:
+                                                              '${dateNow.year}',
+                                                          border:
+                                                              InputBorder.none,
+                                                          focusedBorder:
+                                                              InputBorder.none,
+                                                          enabledBorder:
+                                                              InputBorder.none,
+                                                          errorBorder:
+                                                              InputBorder.none,
+                                                          disabledBorder:
+                                                              InputBorder.none,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                              )),
-                                              trailing: Icon(
-                                                Icons.keyboard_arrow_down,
-                                                color: Colors.black,
-                                              ),
-                                            )),
-                                      )
+                                              )))
                                     ]),
+                                SizedBox(
+                                  height: height * .01,
+                                ),
                                 Column(
                                     crossAxisAlignment:
                                         CrossAxisAlignment.start,
@@ -347,60 +628,191 @@ class _SearchResultState extends State<SearchResult> {
                                         'To',
                                         style: TextStyle(
                                             fontSize: 15,
-                                            color: Colors.white,
+                                            color: Colors.black,
                                             fontWeight: FontWeight.w400),
                                       ),
                                       GestureDetector(
-                                        onTap: () => pickDate('To'),
-                                        child: Container(
-                                            width: MediaQuery.of(context)
-                                                    .size
-                                                    .width *
-                                                0.9,
-                                            height: MediaQuery.of(context)
-                                                    .size
-                                                    .height *
-                                                0.07,
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              border: Border.all(
-                                                  color: Colors.black),
-                                              borderRadius: BorderRadius.all(
-                                                  Radius.circular(5)),
-                                            ),
-                                            child: ListTile(
-                                              leading: Icon(
-                                                Icons.calendar_today,
-                                                color: Colors.black,
+                                          onTap: () => FocusScope.of(context)
+                                              .requestFocus(dayT),
+                                          child: Container(
+                                              width: MediaQuery.of(context)
+                                                      .size
+                                                      .width *
+                                                  0.9,
+                                              height: MediaQuery.of(context)
+                                                      .size
+                                                      .height *
+                                                  0.07,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                border: Border.all(
+                                                    color: Colors.black),
+                                                borderRadius: BorderRadius.all(
+                                                    Radius.circular(5)),
                                               ),
-                                              title: Center(
-                                                  child: Text(
-                                                to != '' ? to : '',
-                                                style: TextStyle(
-                                                  color: Colors.black,
-                                                  fontSize: 17,
+                                              child: Padding(
+                                                padding: EdgeInsets.only(
+                                                    left: width * 0.02),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.center,
+                                                  children: [
+                                                    Container(
+                                                      width: 20,
+                                                      child: TextField(
+                                                        onChanged: (e) => {
+                                                          if (e.length == 2 &&
+                                                              monthTController
+                                                                      .text
+                                                                      .length <
+                                                                  2)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      monthT)
+                                                            }
+                                                          else if (e.length ==
+                                                              2)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      FocusNode())
+                                                            }
+                                                        },
+                                                        controller:
+                                                            dayTController,
+                                                        focusNode: dayT,
+                                                        maxLength: 2,
+                                                        keyboardType:
+                                                            TextInputType
+                                                                .number,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          counterText: '',
+                                                          hintText:
+                                                              '${dateNow.day}',
+                                                          border:
+                                                              InputBorder.none,
+                                                          focusedBorder:
+                                                              InputBorder.none,
+                                                          enabledBorder:
+                                                              InputBorder.none,
+                                                          errorBorder:
+                                                              InputBorder.none,
+                                                          disabledBorder:
+                                                              InputBorder.none,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(' - '),
+                                                    Container(
+                                                      width: 20,
+                                                      child: Center(
+                                                        child: TextField(
+                                                          onChanged: (e) => {
+                                                            if (e.length == 2 &&
+                                                                yearTController
+                                                                        .text
+                                                                        .length <
+                                                                    4)
+                                                              {
+                                                                FocusScope.of(
+                                                                        context)
+                                                                    .requestFocus(
+                                                                        yearT)
+                                                              }
+                                                            else if (e.length ==
+                                                                2)
+                                                              {
+                                                                FocusScope.of(
+                                                                        context)
+                                                                    .requestFocus(
+                                                                        FocusNode())
+                                                              }
+                                                          },
+                                                          controller:
+                                                              monthTController,
+                                                          focusNode: monthT,
+                                                          maxLength: 2,
+                                                          keyboardType:
+                                                              TextInputType
+                                                                  .number,
+                                                          decoration:
+                                                              InputDecoration(
+                                                            counterText: '',
+                                                            hintText:
+                                                                '${dateNow.month}',
+                                                            border: InputBorder
+                                                                .none,
+                                                            focusedBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            enabledBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            errorBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                            disabledBorder:
+                                                                InputBorder
+                                                                    .none,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    Text(' - '),
+                                                    Container(
+                                                      width: 40,
+                                                      child: TextField(
+                                                        onChanged: (e) => {
+                                                          if (e.length == 4)
+                                                            {
+                                                              FocusScope.of(
+                                                                      context)
+                                                                  .requestFocus(
+                                                                      FocusNode())
+                                                            }
+                                                        },
+                                                        keyboardType:
+                                                            TextInputType
+                                                                .number,
+                                                        controller:
+                                                            yearTController,
+                                                        focusNode: yearT,
+                                                        maxLength: 4,
+                                                        decoration:
+                                                            InputDecoration(
+                                                          counterText: '',
+                                                          hintText:
+                                                              '${dateNow.year}',
+                                                          border:
+                                                              InputBorder.none,
+                                                          focusedBorder:
+                                                              InputBorder.none,
+                                                          enabledBorder:
+                                                              InputBorder.none,
+                                                          errorBorder:
+                                                              InputBorder.none,
+                                                          disabledBorder:
+                                                              InputBorder.none,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                              )),
-                                              trailing: Icon(
-                                                Icons.keyboard_arrow_down,
-                                                color: Colors.black,
-                                              ),
-                                            )),
-                                      )
+                                              )))
                                     ]),
                               ],
                             ),
                             actions: [
                               ElevatedButton(
-                                onPressed: () {
-                                  setState(() {
-                                    filterFrom = from;
-                                    filterTo = to;
-                                  });
-                                  Navigator.pop(context);
-                                },
+                                onPressed: () => changeDate(context),
                                 child: Text(
-                                  'Change',
+                                  'Filter',
                                 ),
                               )
                             ],
@@ -440,19 +852,16 @@ class _SearchResultState extends State<SearchResult> {
                         itemCount: articles.length,
                         itemBuilder: (context, index) {
                           var item = articles[index];
-
-                          return item['urlToImage'] != null &&
-                                  item['content'] != null &&
-                                  item['author'] != null
-                              ? GestureDetector(
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                            builder: (context) =>
-                                                Detail(item: item)));
-                                  },
-                                  child: testing(context, item))
-                              : Container();
+                          return GestureDetector(
+                              onTap: () {
+                                Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (context) => Detail(item: item)));
+                              },
+                              child: item['urlToImage'] != null &&
+                                      item['content'] != null &&
+                                      item['author'] != null
+                                  ? testing(context, item, index)
+                                  : Container());
                         });
                   }
               }

@@ -1,6 +1,7 @@
-import 'dart:convert';
-import 'package:intl/intl.dart';
-import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'dart:js';
+// import 'package:intl/intl.dart';
+// import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:newsapp/Authentication/signUp.dart';
 import 'package:newsapp/Home/Categories/TopStories.dart';
@@ -9,8 +10,9 @@ import 'package:newsapp/Home/Categories/headLines.dart';
 import 'package:newsapp/Home/Categories/popularNews.dart';
 import 'package:newsapp/Home/Categories/sportsNews.dart';
 import 'package:newsapp/Home/Search/search.dart';
+import 'package:newsapp/Home/favourite.dart';
 import 'package:newsapp/Home/profile.dart';
-import 'Categories/detail.dart';
+// import 'Categories/detail.dart';
 
 class Home extends StatefulWidget {
   @override
@@ -23,6 +25,7 @@ class _HomeState extends State<Home> {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
     var user = FirebaseAuth.instance.currentUser;
+    // print(user.)
     return DefaultTabController(
         length: 4,
         child: Scaffold(
@@ -38,7 +41,7 @@ class _HomeState extends State<Home> {
                   floating: true, //scroll up
                   snap: true, //fast scroll down
                   backgroundColor: Colors.blue[300],
-
+                  automaticallyImplyLeading: false,
                   // forceElevated:
                   //     innerBoxIsScrolled, //app bar same colour and when scroll the shadow appear under the app bar
 
@@ -98,7 +101,13 @@ class _HomeState extends State<Home> {
                         ),
                         GestureDetector(
                             onTap: () {
-                              print('favourite');
+                              user != null
+                                  ? Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                          builder: (context) => Favourite()))
+                                  : Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                          builder: (context) => SignUp()));
                             },
                             child: Icon(
                               Icons.favorite,
@@ -114,6 +123,7 @@ class _HomeState extends State<Home> {
                                 child: Container(
                                   height: height * 0.07,
                                   child: CircleAvatar(
+                                    backgroundColor: Colors.blue[300],
                                     backgroundImage:
                                         NetworkImage('${user.photoURL}'),
                                     radius: 25,
@@ -121,8 +131,6 @@ class _HomeState extends State<Home> {
                                 ),
                               )
                             : Container(
-                                // height: height * 0.07,
-                                // width: width * 0.2,
                                 child: ElevatedButton(
                                 onPressed: () {
                                   Navigator.push(
@@ -134,7 +142,6 @@ class _HomeState extends State<Home> {
                                   'Sign Up',
                                   style: TextStyle(
                                       color: Colors.blue,
-                                      // fontSize: 17,
                                       fontWeight: FontWeight.bold),
                                 ),
                                 style: ButtonStyle(
@@ -153,7 +160,6 @@ class _HomeState extends State<Home> {
                       ],
                     ),
                   ),
-                  //// title end
                   bottom: TabBar(
                     isScrollable: true,
                     unselectedLabelColor: Colors.white60,
@@ -175,71 +181,4 @@ class _HomeState extends State<Home> {
         // )
         );
   }
-}
-
-Widget testing(context) {
-  var width = MediaQuery.of(context).size.width;
-  var height = MediaQuery.of(context).size.height;
-
-  return Padding(
-    padding: EdgeInsets.only(top: height * 0.01),
-    child: Container(
-      width: width * 1,
-      height: height * 0.12,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.black),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: width * 0.4,
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                fit: BoxFit.cover,
-                image: NetworkImage(
-                    'https://image.shutterstock.com/image-photo/confident-intelligence-grey-hair-senior-260nw-261010109.jpg'),
-              ),
-            ),
-          ),
-          Padding(
-            padding: EdgeInsets.only(
-              top: height * 0.01,
-              bottom: height * 0.01,
-              left: width * 0.01,
-              right: width * 0.01,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: width * 0.57,
-                  child: Text(
-                    '‘Strategy  of terror’:  116 dead as Ecuador prisons become battlegrounds for gangs - The Guardian',
-                    maxLines: 2,
-                    softWrap: true,
-                  ),
-                ),
-                Row(
-                  children: [
-                    Text('9h'),
-                    Container(
-                      height: 18,
-                      child: VerticalDivider(
-                        color: Colors.grey,
-                        width: width * 0.06,
-                        thickness: 1.3,
-                      ),
-                    ),
-                    Text('categories'),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
 }

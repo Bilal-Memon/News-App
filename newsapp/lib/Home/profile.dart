@@ -7,14 +7,19 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'home.dart';
+
 class Profile extends StatefulWidget {
   @override
   _ProfileState createState() => _ProfileState();
 }
 
 class _ProfileState extends State<Profile> {
+  var userController = TextEditingController();
+  var emailController = TextEditingController();
+  var phoneController = TextEditingController();
+  var addressController = TextEditingController();
   var imagePath;
-  // var imageBase;
   var userName = '';
   var email = '';
   var phoneNumber = 'database';
@@ -24,88 +29,118 @@ class _ProfileState extends State<Profile> {
   var genderItems = ['Male', 'Female'];
   var gname = '';
   var dateOfBirth;
-  var user = FirebaseAuth.instance.currentUser;
-  final CollectionReference profileList =
-      FirebaseFirestore.instance.collection('User Detail');
+  final User? currentUser = FirebaseAuth.instance.currentUser;
+  final Stream<QuerySnapshot> documentStream = FirebaseFirestore.instance
+      .collection('Users')
+      .doc('${FirebaseAuth.instance.currentUser!.uid}')
+      .collection('UserDetail')
+      .snapshots();
+  // final CollectionReference profileList =
+  //     FirebaseFirestore.instance.collection('User');
+  logout() async {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacement(
+        context, MaterialPageRoute(builder: (context) => Home()));
+  }
 
   pickImage() async {
-    // final _picker = ImagePicker();
-    // final image = await _picker.pickImage(source: ImageSource.gallery);
-    // var imageBase = path.basename(image!.path);
-    // File file = File(image.path);
-    // try {
-    //   var ref = firebase_storage.FirebaseStorage.instance.ref(imageBase);
-    //   await ref.putFile(file);
-    //   var downloadURL = await ref.getDownloadURL();
     final ImagePicker _picker = ImagePicker();
     final image = await _picker.pickImage(source: ImageSource.gallery);
     File file = File(image!.path);
+    var imageBase = path.basename(image.path);
+    firebase_storage.Reference ref =
+        firebase_storage.FirebaseStorage.instance.ref(imageBase);
     setState(() {
       imagePath = file;
     });
     try {
-      var imageBase = path.basename(image.path);
-      firebase_storage.Reference ref =
-          firebase_storage.FirebaseStorage.instance.ref(imageBase);
       await ref.putFile(file);
       var downloadURL = await ref.getDownloadURL();
-      user!.updatePhotoURL(downloadURL);
-      // print(downloadURL);
-      // if (image1 == '') {
-      //   setState(() {
-      //     image1 = downloadURL;
-      //   });
-      // } else if (image2 == '') {
-      //   setState(() {
-      //     image2 = downloadURL;
-      //   })
-
+      await currentUser!.updatePhotoURL(downloadURL);
     } catch (error) {
       print(error);
     }
   }
 
-  updateProfile(title, name) => {
-        title == 'User Name'
-            ? {
-                setState(() {
-                  userName = name;
-                }),
-                user!.updateDisplayName(name)
-              }
-            : title == 'Email'
-                ? {
-                    setState(() {
-                      email = name;
-                    }),
-                    user!.updateEmail(name)
-                  }
-                : title == 'Gender'
-                    ? profileList.doc(user!.uid).update({'gender': name})
-                    //                profileList.get().then((querySnapshot) {
-                    //  querySnapshot.docs
-                    //     .map((json) => setState((){
-                    //       // phoneNumber=json['phone'];
-                    //       gender=json['gender'];
-                    //       // dateOfBirth=json['dateOfBirth'];
-                    //       // address=json['address'];
-                    //     }))
-                    //     .toList();
-                    // setState(() {
-                    //     isSelected = [false, false];
-                    //     genderItems = ['Male', 'Female'];
-                    //     gender = name;
-                    //   })
-                    : title == 'Address'
-                        ? setState(() {
-                            address = name;
-                          })
-                        : null,
-        print(name),
-        Navigator.of(context).pop()
-      };
-  pickDate() async {
-    FocusScope.of(context).unfocus();
+  final detail = FirebaseFirestore.instance
+      .collection('Users')
+      .doc('${FirebaseAuth.instance.currentUser!.uid}')
+      .collection('UserDetail')
+      .doc('1');
+
+  updateProfile(data, title, name) async {
+    if (title == 'User Name') {
+      await currentUser!
+          .updateDisplayName(userController.text)
+          .then((value) => setState(() {
+                userName = userController.text;
+              }));
+      userController.text = '';
+    } else if (title == 'Email') {
+      AuthCredential credential = EmailAuthProvider.credential(email: emailController.text, password: 'password');
+await FirebaseAuth.instance.currentUser!.reauthenticateWithCredential(credential);
+      // await currentUser!
+      //     .updateEmail(emailController.text)
+      //     .then((value) => setState(() {
+      //           email = emailController.text;
+      //         }))
+      //     .catchError((e) => print(e.message));
+      emailController.text = '';
+    } else if (title == 'Phone') {
+      await detail.update({
+        'dateOfBirth': data['dateOfBirth'],
+        'gender': data['gender'],
+        'phone': phoneController.text,
+        'address': data['address']
+      });
+      phoneController.text = '';
+    } else if (title == 'Gender') {
+      await detail.update({
+        'dateOfBirth': data['dateOfBirth'],
+        'gender': gname,
+        'phone': data['phone'],
+        'address': data['address']
+      });
+      setState(() {
+        isSelected = [false, false];
+        gender = '';
+      });
+    } else if (title == 'Address') {
+      await detail.update({
+        'dateOfBirth': data['dateOfBirth'],
+        'gender': data['gender'],
+        'phone': data['phone'],
+        'address': addressController.text
+      });
+      addressController.text = '';
+    }
+
+    //         // : title == 'Gender'
+    //         //     ? profileList.doc(user!.uid).update({'gender': name})
+    //         //                profileList.get().then((querySnapshot) {
+    //         //  querySnapshot.docs
+    //         //     .map((json) => setState((){
+    //         //       // phoneNumber=json['phone'];
+    //         //       gender=json['gender'];
+    //         //       // dateOfBirth=json['dateOfBirth'];
+    //         //       // address=json['address'];
+    //         //     }))
+    //         //     .toList();
+    //         // setState(() {
+    //         //     isSelected = [false, false];
+    //         //     genderItems = ['Male', 'Female'];
+    //         //     gender = name;
+    //         //   })
+    //         : title == 'Address'
+    //             ? setState(() {
+    //                 address = name;
+    //               })
+    //             : null,
+    // print(name),
+    Navigator.of(context).pop();
+  }
+
+  pickDate(data) async {
     final initialDate = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -115,9 +150,15 @@ class _ProfileState extends State<Profile> {
     );
     final formatter = DateFormat('dd - MMM - yyyy');
     final String formatted = formatter.format(date!);
-    setState(() {
-      dateOfBirth = formatted;
+    await detail.update({
+      'dateOfBirth': formatted,
+      'gender': data['gender'],
+      'phone': data['phone'],
+      'address': data['address']
     });
+    // setState(() {
+    //   dateOfBirth = formatted;
+    // });
   }
 
   Widget genderProperty(name, context) {
@@ -131,7 +172,7 @@ class _ProfileState extends State<Profile> {
     );
   }
 
-  Widget listtile(context, title, subtitle) {
+  Widget listtile(data, context, title, subtitle) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
     return ListTile(
@@ -216,7 +257,7 @@ class _ProfileState extends State<Profile> {
                           actions: [
                             ElevatedButton(
                               onPressed: () => {
-                                updateProfile(title, gname),
+                                updateProfile(data, title, gname),
                               },
                               child: Text(
                                 'Change',
@@ -229,12 +270,12 @@ class _ProfileState extends State<Profile> {
                       barrierDismissible: true,
                     )
                   : title == 'Date of Birth'
-                      ? pickDate()
+                      ? pickDate(data)
                       : title == 'Address'
                           ? showDialog(
                               context: context,
                               builder: (context) {
-                                var name = '';
+                                // var name = '';
                                 return AlertDialog(
                                   content: Column(
                                     mainAxisSize: MainAxisSize.min,
@@ -253,7 +294,7 @@ class _ProfileState extends State<Profile> {
                                             MediaQuery.of(context).size.width *
                                                 0.9,
                                         child: TextFormField(
-                                          onChanged: (e) => {name = e},
+                                          controller: addressController,
                                           keyboardType: TextInputType.multiline,
                                           maxLines: 2,
                                           maxLength: 500,
@@ -264,7 +305,6 @@ class _ProfileState extends State<Profile> {
                                             filled: true,
                                             fillColor: Colors.white,
                                             counterText: '',
-                                            // contentPadding: EdgeInsets.all(10),
                                             isDense: true,
                                             enabledBorder:
                                                 const OutlineInputBorder(
@@ -290,7 +330,7 @@ class _ProfileState extends State<Profile> {
                                   actions: [
                                     ElevatedButton(
                                       onPressed: () =>
-                                          updateProfile(title, name),
+                                          updateProfile(data, title, 'name'),
                                       child: Text(
                                         'Change',
                                       ),
@@ -298,6 +338,165 @@ class _ProfileState extends State<Profile> {
                                   ],
                                 );
                               })
+                          // : title == 'Phone'
+                          //     ? showDialog(
+                          //         context: context,
+                          //         builder: (context) {
+                          //           var name = '';
+                          //           return AlertDialog(
+                          //             content: Column(
+                          //               mainAxisSize: MainAxisSize.min,
+                          //               crossAxisAlignment:
+                          //                   CrossAxisAlignment.start,
+                          //               children: [
+                          //                 Text(
+                          //                   title,
+                          //                   style: TextStyle(
+                          //                       fontSize: 15,
+                          //                       color: Colors.grey,
+                          //                       fontWeight: FontWeight.w400),
+                          //                 ),
+                          //                 Container(
+                          //                   width: MediaQuery.of(context)
+                          //                           .size
+                          //                           .width *
+                          //                       0.9,
+                          //                   height: MediaQuery.of(context)
+                          //                           .size
+                          //                           .height *
+                          //                       0.07,
+                          //                   child: TextFormField(
+                          //                     controller: phoneController,
+                          //                     // keyboardType: type,
+                          //                     // inputFormatters: formate,
+
+                          //                     style: TextStyle(
+                          //                         fontSize: 17,
+                          //                         color: Colors.black),
+                          //                     decoration: InputDecoration(
+                          //                       filled: true,
+                          //                       fillColor: Colors.white,
+                          //                       contentPadding: EdgeInsets.only(
+                          //                           left: 10, right: 10),
+                          //                       // isDense: true,
+                          //                       enabledBorder:
+                          //                           const OutlineInputBorder(
+                          //                               borderRadius:
+                          //                                   BorderRadius.all(
+                          //                                       Radius.circular(
+                          //                                           5)),
+                          //                               borderSide:
+                          //                                   const BorderSide(
+                          //                                 color: Colors.black,
+                          //                               )),
+                          //                       focusedBorder:
+                          //                           OutlineInputBorder(
+                          //                         borderRadius:
+                          //                             BorderRadius.all(
+                          //                                 Radius.circular(5)),
+                          //                         borderSide: const BorderSide(
+                          //                           color: Colors.black,
+                          //                         ),
+                          //                       ),
+                          //                     ),
+                          //                   ),
+                          //                 ),
+                          //               ],
+                          //             ),
+                          //             actions: [
+                          //               ElevatedButton(
+                          //                 onPressed: () =>
+                          //                     updateProfile(data, title, name),
+                          //                 child: Text(
+                          //                   'Change',
+                          //                 ),
+                          //               )
+                          //             ],
+                          //           );
+                          //         })
+                          //     : title == 'User Name'
+                          //         ? showDialog(
+                          //             context: context,
+                          //             builder: (context) {
+                          //               var name = '';
+                          //               return AlertDialog(
+                          //                 content: Column(
+                          //                   mainAxisSize: MainAxisSize.min,
+                          //                   crossAxisAlignment:
+                          //                       CrossAxisAlignment.start,
+                          //                   children: [
+                          //                     Text(
+                          //                       title,
+                          //                       style: TextStyle(
+                          //                           fontSize: 15,
+                          //                           color: Colors.grey,
+                          //                           fontWeight:
+                          //                               FontWeight.w400),
+                          //                     ),
+                          //                     Container(
+                          //                       width: MediaQuery.of(context)
+                          //                               .size
+                          //                               .width *
+                          //                           0.9,
+                          //                       height: MediaQuery.of(context)
+                          //                               .size
+                          //                               .height *
+                          //                           0.07,
+                          //                       child: TextFormField(
+                          //                         controller: userController,
+                          //                         // keyboardType: type,
+                          //                         // inputFormatters: formate,
+
+                          //                         style: TextStyle(
+                          //                             fontSize: 17,
+                          //                             color: Colors.black),
+                          //                         decoration: InputDecoration(
+                          //                           filled: true,
+                          //                           fillColor: Colors.white,
+                          //                           contentPadding:
+                          //                               EdgeInsets.only(
+                          //                                   left: 10,
+                          //                                   right: 10),
+                          //                           // isDense: true,
+                          //                           enabledBorder:
+                          //                               const OutlineInputBorder(
+                          //                                   borderRadius:
+                          //                                       BorderRadius
+                          //                                           .all(Radius
+                          //                                               .circular(
+                          //                                                   5)),
+                          //                                   borderSide:
+                          //                                       const BorderSide(
+                          //                                     color:
+                          //                                         Colors.black,
+                          //                                   )),
+                          //                           focusedBorder:
+                          //                               OutlineInputBorder(
+                          //                             borderRadius:
+                          //                                 BorderRadius.all(
+                          //                                     Radius.circular(
+                          //                                         5)),
+                          //                             borderSide:
+                          //                                 const BorderSide(
+                          //                               color: Colors.black,
+                          //                             ),
+                          //                           ),
+                          //                         ),
+                          //                       ),
+                          //                     ),
+                          //                   ],
+                          //                 ),
+                          //                 actions: [
+                          //                   ElevatedButton(
+                          //                     onPressed: () => updateProfile(
+                          //                         data, title, name),
+                          //                     child: Text(
+                          //                       'Change',
+                          //                     ),
+                          //                   )
+                          //                 ],
+                          //               );
+                          //             })
                           : showDialog(
                               context: context,
                               builder: (context) {
@@ -323,9 +522,16 @@ class _ProfileState extends State<Profile> {
                                             MediaQuery.of(context).size.height *
                                                 0.07,
                                         child: TextFormField(
+                                          controller: title == 'User Name'
+                                              ? userController
+                                              : title == 'Email'
+                                                  ? emailController
+                                                  : title == 'Phone'
+                                                      ? phoneController
+                                                      : null
                                           // keyboardType: type,
                                           // inputFormatters: formate,
-                                          onChanged: (e) => {name = e},
+                                          ,
                                           style: TextStyle(
                                               fontSize: 17,
                                               color: Colors.black),
@@ -359,7 +565,7 @@ class _ProfileState extends State<Profile> {
                                   actions: [
                                     ElevatedButton(
                                       onPressed: () =>
-                                          updateProfile(title, name),
+                                          updateProfile(data, title, name),
                                       child: Text(
                                         'Change',
                                       ),
@@ -375,30 +581,35 @@ class _ProfileState extends State<Profile> {
   Widget build(BuildContext context) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
-    var phone = profileList.get().then((querySnapshot) {
-      querySnapshot.docs.map((json) => phoneNumber = json['phone']).toList();
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      if (user != null) {
+        print(user.displayName);
+      }
     });
-    var dateOfBirthF = profileList.get().then((querySnapshot) {
-      querySnapshot.docs
-          .map((json) => dateOfBirth = '${json['dateOfBirth']}')
-          .toList();
-    });
-    var genderF = profileList.get().then((querySnapshot) {
-      querySnapshot.docs.map((json) => gender= json['gender']).toList();
-    });
-    // var addressF = profileList.get().then((querySnapshot) {
-    //   querySnapshot.docs.map((json) => address=json['address']).toList();
+    // var phone = profileList.get().then((querySnapshot) {
+    //   querySnapshot.docs.map((json) => phoneNumber = json['phone']).toList();
     // });
-    // profileList.get().then((querySnapshot) {
+    // var dateOfBirthF = profileList.get().then((querySnapshot) {
     //   querySnapshot.docs
-    //       .map((json) => setState(() {
-    //             phoneNumber = json['phone'];
-    //             gender = json['gender'];
-    //             dateOfBirth = json['dateOfBirth'];
-    //             address = json['address'];
-    //           }))
+    //       .map((json) => dateOfBirth = '${json['dateOfBirth']}')
     //       .toList();
     // });
+    // var genderF = profileList.get().then((querySnapshot) {
+    //   querySnapshot.docs.map((json) => gender= json['gender']).toList();
+    // });
+    // // var addressF = profileList.get().then((querySnapshot) {
+    // //   querySnapshot.docs.map((json) => address=json['address']).toList();
+    // // });
+    // // profileList.get().then((querySnapshot) {
+    // //   querySnapshot.docs
+    // //       .map((json) => setState(() {
+    // //             phoneNumber = json['phone'];
+    // //             gender = json['gender'];
+    // //             dateOfBirth = json['dateOfBirth'];
+    // //             address = json['address'];
+    // //           }))
+    // //       .toList();
+    // // });
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -414,31 +625,19 @@ class _ProfileState extends State<Profile> {
                     fontWeight: FontWeight.bold)),
             centerTitle: true,
           ),
-          body: SingleChildScrollView(
-              // reverse: true,
-              child: Column(mainAxisSize: MainAxisSize.min,
-                  // mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  // crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                SizedBox(
-                  height: height * 0.02,
-                ),
-                imagePath != null
-                    ? MouseRegion(
-                        cursor: SystemMouseCursors.click,
-                        child: GestureDetector(
-                            onTap: pickImage,
-                            child: CircleAvatar(
-                                backgroundColor: Colors.black,
-                                radius: 60,
-                                child: CircleAvatar(
-                                  backgroundColor: Colors.white,
-                                  radius: 58,
-                                  backgroundImage: FileImage(
-                                    imagePath,
-                                  ),
-                                ))))
-                    : user!.photoURL != null
+          body: StreamBuilder(
+              stream: documentStream,
+              builder: (BuildContext context, AsyncSnapshot snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Something Went Wrong'));
+                } else if (snapshot.hasData) {
+                  var data = snapshot.data!.docs.map((e) => e.data()).toList();
+                  return SingleChildScrollView(
+                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    SizedBox(
+                      height: height * 0.02,
+                    ),
+                    imagePath != null
                         ? MouseRegion(
                             cursor: SystemMouseCursors.click,
                             child: GestureDetector(
@@ -449,86 +648,93 @@ class _ProfileState extends State<Profile> {
                                     child: CircleAvatar(
                                       backgroundColor: Colors.white,
                                       radius: 58,
-                                      backgroundImage: NetworkImage(
-                                        '${user!.photoURL}',
+                                      backgroundImage: FileImage(
+                                        imagePath,
                                       ),
                                     ))))
-                        : MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: GestureDetector(
-                              onTap: pickImage,
-                              child: Container(
-                                  child: CircleAvatar(
-                                backgroundColor: Colors.black,
-                                radius: 60,
-                                child: CircleAvatar(
-                                    backgroundColor: Colors.white,
-                                    radius: 58,
-                                    // backgroundImage:
-                                    // Image.asset('assets/images/user..png'),
-                                    child: Column(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: [
-                                        Icon(Icons.add_a_photo_outlined,
-                                            size: 40, color: Colors.black),
-                                        Text(
-                                          'Add Image',
-                                          style: TextStyle(
-                                              color: Colors.grey, fontSize: 16),
-                                        ),
-                                      ],
-                                    )
-                                    // Icon(Icons.add_a_photo_outlined,
-                                    //     size: 40, color: Colors.black)
-                                    ),
-                              )),
-                            ),
+                        : currentUser!.photoURL != null
+                            ? MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                    onTap: pickImage,
+                                    child: CircleAvatar(
+                                        backgroundColor: Colors.black,
+                                        radius: 60,
+                                        child: CircleAvatar(
+                                          backgroundColor: Colors.white,
+                                          radius: 58,
+                                          backgroundImage: NetworkImage(
+                                            '${currentUser!.photoURL}',
+                                          ),
+                                        ))))
+                            : MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: GestureDetector(
+                                  onTap: pickImage,
+                                  child: Container(
+                                      child: CircleAvatar(
+                                    backgroundColor: Colors.black,
+                                    radius: 60,
+                                    child: CircleAvatar(
+                                        backgroundColor: Colors.white,
+                                        radius: 58,
+                                        child: Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.add_a_photo_outlined,
+                                                size: 40, color: Colors.black),
+                                            Text(
+                                              'Add Image',
+                                              style: TextStyle(
+                                                  color: Colors.grey,
+                                                  fontSize: 16),
+                                            ),
+                                          ],
+                                        )),
+                                  )),
+                                ),
+                              ),
+                    listtile(
+                        data[0],
+                        context,
+                        'User Name',
+                        userName != ''
+                            ? '$userName'
+                            : '${currentUser!.displayName}'),
+                    listtile(data[0], context, 'Email',
+                        email != '' ? '$email' : '${currentUser!.email}'),
+                    listtile(data[0], context, 'Phone', '${data[0]['phone']}'),
+                    listtile(
+                        data[0], context, 'Gender', '${data[0]['gender']}'),
+                    listtile(data[0], context, 'Date of Birth',
+                        '${data[0]['dateOfBirth']}'),
+                    listtile(
+                        data[0], context, 'Address', '${data[0]['address']}'),
+                    SizedBox(
+                      height: height * 0.02,
+                    ),
+                    Container(
+                        width: MediaQuery.of(context).size.width * 0.4,
+                        height: MediaQuery.of(context).size.height * 0.06,
+                        child: ElevatedButton(
+                          onPressed: logout,
+                          child: Text(
+                            'Log Out',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold),
                           ),
-                listtile(context, 'User Name',
-                    userName != '' ? '${userName}' : '${user!.displayName}'),
-                listtile(context, 'Email',
-                    email != '' ? '${email}' : '${user!.email}'),
-                listtile(context, 'Phone',
-                    phoneNumber != '' ? '${phoneNumber}' : '${phone}'),
-                listtile(
-                    context, 'Gender', gender != '' ? '$gender' : '$genderF'),
-                listtile(
-                    context,
-                    'Date of Birth',
-                    dateOfBirth != null
-                        ? '$dateOfBirth'
-                        : dateOfBirthF), //dd - MMM - yyyy
-                listtile(context, 'Address', 'addressF'),
-                SizedBox(
-                  height: height * 0.02,
-                ),
-                Container(
-                    width: MediaQuery.of(context).size.width * 0.4,
-                    height: MediaQuery.of(context).size.height * 0.06,
-                    child: ElevatedButton(
-                      onPressed:
-                          //  _isButtonDisabled ? null :
-                          () {
-                        print(userName);
-                        print(email);
-                        print(phoneNumber);
-                        print(address);
-                      },
-                      child: Text(
-                        'Log Out',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold),
-                      ),
-                      style: ButtonStyle(
-                          backgroundColor:
-                              MaterialStateProperty.all<Color>(Colors.blue)),
-                    )),
-              ]))
-          // )
-          ),
+                          style: ButtonStyle(
+                              backgroundColor: MaterialStateProperty.all<Color>(
+                                  Colors.blue)),
+                        )),
+                  ]));
+                } else {
+                  return Center(child: CircularProgressIndicator());
+                }
+              })),
     );
   }
 }

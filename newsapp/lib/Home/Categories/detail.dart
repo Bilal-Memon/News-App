@@ -39,7 +39,7 @@ class _DetailState extends State<Detail> {
                       onPressed: () => Navigator.pop(context)),
                   // Navigator.pushReplacement(context,
                   //     MaterialPageRoute(builder: (context) => Home()))),
-                  title: Text('TopStories'),
+                  title: Text('Detail'),
                   backgroundColor: Colors.blue[300],
                   centerTitle: true,
                 ),

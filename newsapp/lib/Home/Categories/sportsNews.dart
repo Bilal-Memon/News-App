@@ -1,8 +1,15 @@
 import 'dart:convert';
+
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:newsapp/Authentication/signUp.dart';
 import 'package:newsapp/Home/Categories/detail.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class SportsNews extends StatefulWidget {
   @override
@@ -10,21 +17,79 @@ class SportsNews extends StatefulWidget {
 }
 
 class _SportsNewsState extends State<SportsNews> {
+  final currentUser = FirebaseAuth.instance.currentUser;
+  var docId = Uuid();
+  var favouriteHeart = [];
+  final customCacheManager =
+      CacheManager(Config('sportsCacheKey', stalePeriod: Duration(days: 2)));
+
   getUser() async {
+    var db = FirebaseFirestore.instance;
     var response = await http.get(Uri.parse(
         'https://newsapi.org/v2/top-headlines?language=en&country=sa&category=sports&pageSize=50&apiKey=2d994719819c49a483538246c73c74ab'));
-    // 'https://newsapi.org/v2/top-headlines?country=sa&apiKey=b07df34d71074362a01eac1014c09def'));
     final body = json.decode(response.body);
-    List takingData = body['articles'];
-    print(takingData.length);
-    return takingData;
+    List data = body['articles'];
+    if (FirebaseAuth.instance.currentUser != null) {
+      var favouriteCheck = await db
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .get()
+          .then((querySnapshot) =>
+              querySnapshot.docs.map((e) => e['articles']).toList());
+      for (var i = 0; i < data.length; i++) {
+        data[i]['fav'] = 'off';
+        for (var fI = 0; fI < favouriteCheck.length; fI++) {
+          if (favouriteCheck[fI]['title'] == data[i]['title']) {
+            data[i] = favouriteCheck[fI];
+          }
+        }
+        favouriteHeart = [...favouriteHeart, data[i]['fav']];
+      }
+    }
+    return data;
   }
 
-  Widget testing(context, item) {
+  favouriteAdd(item, index) async {
+    var id = docId.v4();
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+    try {
+      item['id'] = id;
+      item['fav'] = 'on';
+      await firestore
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .doc('$id')
+          .set({'articles': item});
+      setState(() {
+        favouriteHeart[index] = 'on';
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  favouriteRemove(item, index) async {
+    FirebaseFirestore firestore = FirebaseFirestore.instance;
+    try {
+      await firestore
+          .collection('Users')
+          .doc('${FirebaseAuth.instance.currentUser!.uid}')
+          .collection('Favourite')
+          .doc('${item['id']}')
+          .delete();
+      setState(() {
+        favouriteHeart[index] = 'off';
+      });
+    } catch (e) {
+      print(e);
+    }
+  }
+
+  Widget testing(context, item, index) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
-
-    var time = '';
     var datebaseTime = DateTime.parse(item['publishedAt']);
     final dateString = DateFormat('dd-MM-yyyy h:mma').format(datebaseTime);
     final datemonth = DateFormat('dd-MM-yyyy').format(datebaseTime);
@@ -32,6 +97,11 @@ class _SportsNewsState extends State<SportsNews> {
         DateFormat("dd-MM-yyyy h:mma").parse(dateString);
     final date2 = DateTime.now();
     final difference = date2.difference(notificationDate);
+    checking() async {
+      await precacheImage(
+          CachedNetworkImageProvider('${item['urlToImage']}'), context);
+    }
+    checking();
     return Padding(
       padding: EdgeInsets.only(top: height * 0.01),
       child: Container(
@@ -43,28 +113,77 @@ class _SportsNewsState extends State<SportsNews> {
         ),
         child: Stack(
           children: [
-            Positioned(
-              right: width * 0.02,
-              bottom: height * 0.005,
-              child: GestureDetector(
-                onTap: () {},
-                child: Icon(
-                  Icons.favorite_border,
-                  color: Colors.red,
-                ),
-              ),
-            ),
+            FirebaseAuth.instance.currentUser != null
+                ? favouriteHeart[index] == 'on'
+                    ? Positioned(
+                        right: width * 0.02,
+                        bottom: height * 0.005,
+                        child: GestureDetector(
+                          onTap: () => {
+                            favouriteRemove(item, index),
+                          },
+                          child: Icon(
+                            Icons.favorite,
+                            color: Colors.red,
+                          ),
+                        ),
+                      )
+                    : Positioned(
+                        right: width * 0.02,
+                        bottom: height * 0.005,
+                        child: GestureDetector(
+                          onTap: () => {
+                            favouriteAdd(item, index),
+                          },
+                          child: Icon(
+                            Icons.favorite_border,
+                          ),
+                        ),
+                      )
+                : Positioned(
+                    right: width * 0.02,
+                    bottom: height * 0.005,
+                    child: GestureDetector(
+                      onTap: () => {
+                        Navigator.of(context).push(
+                            MaterialPageRoute(builder: (context) => SignUp()))
+                      },
+                      child: Icon(
+                        Icons.favorite_border,
+                      ),
+                    ),
+                  ),
             Row(
               children: [
                 Container(
-                  width: width * 0.4,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
+                    width: width * 0.4,
+                    height: height * 0.12,
+                    child: CachedNetworkImage(
+                      cacheManager: customCacheManager,
+                      key: UniqueKey(),
+                      imageUrl: '${item['urlToImage']}',
+                      width: width * 0.4,
+                      height: height * 0.12,
                       fit: BoxFit.cover,
-                      image: NetworkImage('${item['urlToImage']}'),
-                    ),
-                  ),
-                ),
+                      placeholder: (context, item) => Container(
+                        color: Colors.black12,
+                      ),
+                      errorWidget: (context, item, error) => Container(
+                        color: Colors.black12,
+                        child: Icon(Icons.error, color: Colors.red),
+                      ),
+                    )),
+                // Container(
+                //   width: width * 0.4,
+                //   decoration: BoxDecoration(
+                //     image: DecorationImage(
+                //       fit: BoxFit.cover,
+                //       image:
+                //           CachedNetworkImageProvider('${item['urlToImage']}',),
+                //       //  NetworkImage('${item['urlToImage']}'),
+                //     ),
+                //   ),
+                // ),
                 Padding(
                   padding: EdgeInsets.only(
                     top: height * 0.01,
@@ -113,8 +232,6 @@ class _SportsNewsState extends State<SportsNews> {
                           ),
                           Container(
                             width: width * 0.35,
-                            // decoration: BoxDecoration(
-                            //     border: Border.all(color: Colors.black)),
                             child: Text(
                               '${item['source']['name']}',
                               maxLines: 1,
@@ -138,7 +255,6 @@ class _SportsNewsState extends State<SportsNews> {
   Widget build(BuildContext context) {
     var width = MediaQuery.of(context).size.width;
     var height = MediaQuery.of(context).size.height;
-
     return SafeArea(
       top: false,
       bottom: false,
@@ -169,7 +285,7 @@ class _SportsNewsState extends State<SportsNews> {
                                 child: item['urlToImage'] != null &&
                                         item['content'] != null &&
                                         item['author'] != null
-                                    ? testing(context, item)
+                                    ? testing(context, item, index)
                                     : Container());
                           },
                           childCount: articles.length,

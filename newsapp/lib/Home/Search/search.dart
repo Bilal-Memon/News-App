@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:http/http.dart' as http;
 import 'package:newsapp/Home/Categories/detail.dart';
 import 'package:newsapp/Home/Search/searchResult.dart';
@@ -12,6 +14,14 @@ class Search extends StatefulWidget {
 class _SearchState extends State<Search> {
   var searchController = TextEditingController();
   var search = '';
+  final customCacheManager = CacheManager(
+      Config('searchCacheKey', stalePeriod: Duration(minutes: 30)));
+
+  checking(item) async {
+    await precacheImage(
+        CachedNetworkImageProvider('${item['urlToImage']}'), context);
+  }
+
   getUser() async {
     var dateTo = DateTime.now();
     var dateFrom;
@@ -50,17 +60,11 @@ class _SearchState extends State<Search> {
         dateFrom = '${dateTo.year}-${dateTo.month - 1}-${30}';
       }
     }
-    //main
     var response = await http.get(Uri.parse(
         'https://newsapi.org/v2/everything?qInTitle=$search&from=$dateFrom&sortBy=top&pageSize=30&apiKey=2d994719819c49a483538246c73c74ab'));
-    // 'https://newsapi.org/v2/everything?language=en&q=stories&from=$dateFrom&to=${dateTo.year}-${dateTo.month}-${dateTo.day}&pageSize=50&sortBy=top&apiKey=56c6fdfe8bed415480e0088f18c86c0f'));
     final body = json.decode(response.body);
     List takingData = body['articles'].cast<dynamic>();
-    // if(takingData!=null){
     return takingData;
-    // return takingData as Map<String, dynamic>;
-    // }
-    // List takingData = body['articles'];
   }
 
   @override
@@ -73,9 +77,9 @@ class _SearchState extends State<Search> {
           appBar: AppBar(
             backgroundColor: Colors.grey[100],
             leading: BackButton(
-                color: Colors.black, onPressed: () =>
-                Navigator.popUntil(context, ModalRoute.withName('/'))),
-                //  Navigator.pop(context)),
+                color: Colors.black,
+                onPressed: () =>
+                    Navigator.popUntil(context, ModalRoute.withName('/'))),
             titleSpacing: 0,
             title: TextFormField(
               onChanged: (e) => {
@@ -136,24 +140,21 @@ class _SearchState extends State<Search> {
                             ),
                           );
                         }
-                        //  else if (snapshort.connectionState==ConnectionState.none) {
+                        //  else if (snapshort) {
                         //   return Center(child: Text('No Suggestion'));
                         // }
-                        else
-                        //  if (snapshort.hasData) {
-                        {
-                          // var articles = snapshort.data as List;
+                        else {
                           var articles = snapshort.data as List;
                           return ListView.builder(
                               itemCount: articles.length,
                               itemBuilder: (context, index) {
                                 var item = articles[index];
-
+                                item['urlToImage'] != null
+                                    ? checking(item)
+                                    : null;
                                 return item['urlToImage'] != null &&
                                         item['content'] != null &&
                                         item['author'] != null
-                                    //  &&
-                                    // index <10
                                     ? GestureDetector(
                                         onTap: () {
                                           setState(() {
@@ -169,13 +170,33 @@ class _SearchState extends State<Search> {
                                             leading: Padding(
                                               padding: EdgeInsets.only(
                                                   right: width * 0.01),
-                                              child: CircleAvatar(
-                                                backgroundColor: Colors.white,
-                                                radius: 25,
-                                                backgroundImage: NetworkImage(
-                                                  '${item['urlToImage']}',
-                                                ),
-                                              ),
+                                              child: 
+                                                 ClipRRect(
+                                                   borderRadius: BorderRadius.circular(25),
+                                                   child: CachedNetworkImage(
+                                                      cacheManager:
+                                                          customCacheManager,
+                                                      key: UniqueKey(),
+                                                      imageUrl:
+                                                          '${item['urlToImage']}',
+                                                      width: 40,
+                                                      height: 40,
+                                                      fit: BoxFit.cover,
+                                                      placeholder: (context,
+                                                              item) =>
+                                                          Container(
+                                                            color: Colors.black12,
+                                                          ),
+                                                      errorWidget: (context, item,
+                                                              error) =>
+                                                          Container(
+                                                            color: Colors.black12,
+                                                            child: Icon(
+                                                                Icons.error,
+                                                                color:
+                                                                    Colors.red),
+                                                          )),
+                                                 ),
                                             ),
                                             title: Text(
                                               '${item['title']}',
@@ -197,51 +218,6 @@ class _SearchState extends State<Search> {
                                     : Container();
                               });
                         }
-
-                      // }
-                      // if (snapshort.hasError) {
-                      //   return Center(child: Text('Nothing'));
-                      //   // return Center(child: Text('${snapshort.error}'));
-                      // }
-                      // else if(snapshort.data==null){
-                      //   return Center(child: Text('Nothing'));
-
-                      // }
-                      // else if (snapshort.hasData) {
-                      //   var articles = snapshort.data as List;
-                      //   return
-                      //       //  Padding(
-                      //       //     padding: EdgeInsets.only(bottom: height * 0.004),
-                      //       //     child:
-                      //       ListView.builder(
-                      //           itemCount: articles.length,
-                      //           itemBuilder: (context, index) {
-                      //             var item = articles[index];
-                      //             return GestureDetector(
-                      //                 onTap: () {
-                      //                   print(item['source']['name']);
-                      //                   // Navigator.of(context).push(MaterialPageRoute(
-                      //                   //     builder: (context) =>
-                      //                   //         Detail(item: item)));
-                      //                 },
-                      //                 child: ListTile(
-                      //                   title: Text('${item['title']}'),
-                      //                   // title: Text('${item['source']['name']}'),
-                      //                 ));
-                      // }
-                      // )
-                      // return GestureDetector(
-                      //     onTap: () {
-                      //       // Navigator.of(context).push(MaterialPageRoute(
-                      //       //     builder: (context) =>
-                      //       //         Detail(item: item)));
-                      //     },
-                      //     child: item['urlToImage'] != null &&
-                      //             item['content'] != null &&
-                      //             item['author'] != null
-                      //         ? testing(context, item)
-                      //         : Container());
-
                     }
                     // } else {
                     //   return Center(child: CircularProgressIndicator());

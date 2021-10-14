@@ -9,33 +9,61 @@ class Login extends StatefulWidget {
 }
 
 class _LoginState extends State<Login> {
-  var email = '';
-  var password = '';
-
+  var email = TextEditingController();
+  var password = TextEditingController();
+  bool _isLoading = false;
+  var emailError = '';
+  var passError = '';
   login() async {
-    setState(() {
-      email = '';
-      password = '';
-    });
-    try {
-      UserCredential loginUser = await FirebaseAuth.instance
-          .signInWithEmailAndPassword(email: email, password: password);
-    }
-    // if (loginUser==null) {
-
-    // }
-    on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        print('No user found for that email.');
-      } else if (e.code == 'wrong-password') {
-        print('Wrong password provided for that user.');
+    FocusScope.of(context).unfocus();
+    if (email.text == '' && password.text == '') {
+      setState(() {
+        emailError = 'Please enter email';
+        passError = 'Please enter password';
+      });
+    } else if (email.text == '') {
+      setState(() {
+        emailError = 'Please enter email';
+      });
+    } else if (password.text == '') {
+      setState(() {
+        passError = 'Please enter password';
+      });
+    } else {
+      setState(() {
+        _isLoading = true;
+      });
+      try {
+        UserCredential loginUser = await FirebaseAuth.instance
+            .signInWithEmailAndPassword(
+                email: email.text, password: password.text);
+      } on FirebaseAuthException catch (e) {
+        if (e.code.contains('email') == true) {
+          setState(() {
+            _isLoading = false;
+            emailError = '${e.message}';
+          });
+        } else if (e.code.contains('password') == true) {
+          setState(() {
+            _isLoading = false;
+            passError = '${e.message}';
+          });
+        }
+      }
+      if (emailError == '' &&
+          passError == '' &&
+          email.text != '' &&
+          password.text != '') {
+        setState(() {
+          _isLoading = false;
+        });
+        Navigator.of(context)
+            .pushReplacement(MaterialPageRoute(builder: (context) => Home()));
       }
     }
-    Navigator.of(context)
-        .pushReplacement(MaterialPageRoute(builder: (context) => Home()));
   }
 
-  Widget input(context, name, type, formate, hash, suggestion) {
+  Widget input(context, name, type, hash, suggestion) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -48,21 +76,22 @@ class _LoginState extends State<Login> {
           width: MediaQuery.of(context).size.width * 0.9,
           height: MediaQuery.of(context).size.height * 0.07,
           child: TextFormField(
+            controller: name == 'Email'
+                ? email
+                : name == 'Password'
+                    ? password
+                    : null,
             keyboardType: type,
-            inputFormatters: formate,
-            onChanged: (e) => {
-              name == 'Email'
-                  ? setState(() {
-                      email = e;
-                    })
-                  : name == 'Password'
-                      ? setState(() {
-                          password = e;
-                        })
-                      : null
-            },
             style: TextStyle(fontSize: 17, color: Colors.black),
-
+            onChanged: (e) {
+              setState(() {
+                name == 'Email'
+                    ? emailError = ''
+                    : name == 'Password'
+                        ? passError = ''
+                        : null;
+              });
+            },
             obscureText: hash, //true
             enableSuggestions: suggestion, //false
             decoration: InputDecoration(
@@ -84,6 +113,25 @@ class _LoginState extends State<Login> {
             ),
           ),
         ),
+        name == 'Email'
+            ? Container(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: Text(
+                  '$emailError',
+                  textAlign: TextAlign.left,
+                  style: TextStyle(color: Colors.red, fontSize: 13),
+                ),
+              )
+            : name == 'Password'
+                ? Container(
+                    width: MediaQuery.of(context).size.width * 0.9,
+                    child: Text(
+                      '$passError',
+                      textAlign: TextAlign.left,
+                      style: TextStyle(color: Colors.red, fontSize: 13),
+                    ),
+                  )
+                : Container()
       ],
     );
   }
@@ -136,34 +184,60 @@ class _LoginState extends State<Login> {
                           height: height * 0.03,
                         ),
                         input(context, 'Email', TextInputType.emailAddress,
-                            null, false, true),
+                            false, true),
                         SizedBox(
                           height: height * 0.01,
                         ),
-                        input(context, 'Password', TextInputType.text, null,
-                            true, false),
+                        input(context, 'Password', TextInputType.text, true,
+                            false),
                         SizedBox(
                           height: height * 0.01,
                         ),
-                        Container(
-                            width: MediaQuery.of(context).size.width * 0.4,
-                            height: MediaQuery.of(context).size.height * 0.06,
-                            child: ElevatedButton(
-                              onPressed:
-                                  //  _isButtonDisabled ? null :
-                                  login,
-                              child: Text(
-                                'Login',
-                                style: TextStyle(
-                                    color: Colors.blue,
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              style: ButtonStyle(
-                                  backgroundColor:
-                                      MaterialStateProperty.all<Color>(
-                                          Colors.white)),
-                            )),
+                        _isLoading
+                            ? Container(
+                                width: MediaQuery.of(context).size.width * 0.5,
+                                height:
+                                    MediaQuery.of(context).size.height * 0.06,
+                                child: ElevatedButton(
+                                  onPressed: () => {},
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      CircularProgressIndicator(
+                                          color: Colors.blue),
+                                      Text(
+                                        'Please Wait...',
+                                        style: TextStyle(
+                                            color: Colors.blue, fontSize: 15),
+                                      )
+                                    ],
+                                  ),
+                                  style: ButtonStyle(
+                                      backgroundColor:
+                                          MaterialStateProperty.all<Color>(
+                                              Colors.white)),
+                                ))
+                            : Container(
+                                width: MediaQuery.of(context).size.width * 0.4,
+                                height:
+                                    MediaQuery.of(context).size.height * 0.06,
+                                child: ElevatedButton(
+                                  onPressed:
+                                      //  _isButtonDisabled ? null :
+                                      login,
+                                  child: Text(
+                                    'Login',
+                                    style: TextStyle(
+                                        color: Colors.blue,
+                                        fontSize: 17,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                  style: ButtonStyle(
+                                      backgroundColor:
+                                          MaterialStateProperty.all<Color>(
+                                              Colors.white)),
+                                )),
                         SizedBox(
                           height: height * 0.02,
                         ),
